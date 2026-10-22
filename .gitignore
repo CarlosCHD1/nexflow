@@ -1,0 +1,34 @@
+# Configurações com Chaves de API Privadas e Histórico Pessoal
+config.json
+history.json
+*.log
+wisprflow.log
+app.pid
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# PyInstaller / Build
+build/
+dist/
+*.manifest
+*.spec
+
+# Áudios temporários
+*.wav
+*.mp3
+*.ogg
+
+# IDEs e Sistema
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
