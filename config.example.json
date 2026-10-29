@@ -23,5 +23,10 @@
   "trailing_space": false,
   "stats_total_words": 0,
   "stats_total_dictations": 0,
-  "stats_seconds_recorded": 0.0
+  "stats_seconds_recorded": 0.0,
+  "audio_recorder_enabled": true,
+  "audio_recorder_hotkey_codes": [18, 65],
+  "audio_recorder_hotkey_label": "Alt + A",
+  "audio_recorder_sample_rate": 48000,
+  "stats_audio_recordings_count": 0
 }

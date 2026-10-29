@@ -563,6 +563,7 @@ class GlobalHotkeyListener:
         on_cancel_recording: Callable[[], None],
         on_toggle_locked: Optional[Callable[[], None]] = None,
         on_master_toggle: Optional[Callable[[bool], None]] = None,
+        on_toggle_audio_recording: Optional[Callable[[], None]] = None,
         initial_tool_enabled: bool = True,
     ):
         self.get_hotkey_codes = get_hotkey_codes
@@ -572,6 +573,7 @@ class GlobalHotkeyListener:
         self.on_cancel_recording = on_cancel_recording
         self.on_toggle_locked = on_toggle_locked
         self.on_master_toggle = on_master_toggle
+        self.on_toggle_audio_recording = on_toggle_audio_recording
 
         self.tool_enabled = initial_tool_enabled
         self._running = False
@@ -581,6 +583,7 @@ class GlobalHotkeyListener:
         self._hook_handle = None
         self._hook_proc_ref = None
         self._ctrl_caps_latched = False
+        self._alt_a_latched = False
         self.is_recording_active = False
 
     def start(self) -> None:
@@ -673,6 +676,25 @@ class GlobalHotkeyListener:
                             # Ferramenta DESATIVADA -> CapsLock funciona normalmente no Windows!
                             _LL_INTERCEPTED_DOWN[VK_CAPITAL] = False
 
+                    # Caso 3: Alt + A para o Gravador de Áudio Dedicado (Salva arquivo em Vídeos/Conteúdos/áudios)
+                    if vk == 0x41:  # Tecla 'A'
+                        alt_down = bool(
+                            (user32.GetAsyncKeyState(VK_MENU) & 0x8000)
+                            or (user32.GetAsyncKeyState(VK_LMENU) & 0x8000)
+                            or (user32.GetAsyncKeyState(VK_RMENU) & 0x8000)
+                        )
+                        if alt_down:
+                            if is_down and not self._alt_a_latched:
+                                self._alt_a_latched = True
+                                if self.on_toggle_audio_recording:
+                                    threading.Thread(
+                                        target=self.on_toggle_audio_recording,
+                                        daemon=True,
+                                    ).start()
+                            elif is_up:
+                                self._alt_a_latched = False
+                            return 1  # Engole o Alt+A para não abrir atalhos no app em foco
+
             return user32.CallNextHookEx(self._hook_handle, nCode, wParam, lParam)
 
         self._hook_proc_ref = HOOKPROC(_low_level_proc)
@@ -698,6 +720,7 @@ class GlobalHotkeyListener:
 
     def _poll_loop(self) -> None:
         was_combo_down = False
+        was_alt_a_down = False
         press_start_time = 0.0
         active_submode = "hold"  # "hold" ou "toggle_latched"
         notified_hold = False
@@ -705,8 +728,20 @@ class GlobalHotkeyListener:
         while self._running:
             if self._paused or not self.tool_enabled:
                 was_combo_down = False
+                was_alt_a_down = False
                 time.sleep(0.03)
                 continue
+
+            # Fallback de polling para Alt + A (Gravador de Áudio)
+            alt_a_down = is_key_pressed(VK_MENU) and is_key_pressed(0x41)
+            if alt_a_down and not was_alt_a_down:
+                was_alt_a_down = True
+                if not self._alt_a_latched and self.on_toggle_audio_recording:
+                    self._alt_a_latched = True
+                    threading.Thread(target=self.on_toggle_audio_recording, daemon=True).start()
+            elif not alt_a_down and was_alt_a_down:
+                was_alt_a_down = False
+                self._alt_a_latched = False
 
             codes = self.get_hotkey_codes()
             mode = self.get_hotkey_mode()  # "smart", "hold", "toggle"

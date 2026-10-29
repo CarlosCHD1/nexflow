@@ -68,10 +68,12 @@ def list_microphones() -> List[Dict[str, any]]:
 
 
 class _SingleDeviceStream:
-    """Captura áudio de 1 dispositivo WinMM específico em 16kHz 16-bit Mono."""
+    """Captura áudio de 1 dispositivo WinMM específico."""
 
-    def __init__(self, dev_id: int, sample_rate: int, chunk_bytes: int, num_buffers: int):
+    def __init__(self, dev_id: int, sample_rate: int, chunk_bytes: int, num_buffers: int, channels: int = 1):
         self.dev_id = dev_id
+        self.sample_rate = sample_rate
+        self.channels = channels
         self.hwi = ctypes.c_void_p()
         self.buffers = []
         self.headers = []
@@ -82,10 +84,10 @@ class _SingleDeviceStream:
 
         wfx = WAVEFORMATEX(
             WAVE_FORMAT_PCM,
-            1,
+            channels,
             sample_rate,
-            sample_rate * 2,
-            2,
+            sample_rate * channels * 2,
+            channels * 2,
             16,
             0,
         )
@@ -179,6 +181,8 @@ class AudioRecorder:
         self.on_auto_silence_stop = on_auto_silence_stop
         self.is_recording = False
         self.auto_stop_on_silence = True
+        self.active_sample_rate = 16000
+        self.active_channels = 1
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         self._best_pcm_bytes: bytes = b""
@@ -187,10 +191,18 @@ class AudioRecorder:
         self.waveform_bars: List[float] = [0.08] * 9
         self.active_mic_name: str = ""
 
-    def start(self, device_id: int = -1, allow_auto_silence_stop: bool = True) -> bool:
+    def start(
+        self,
+        device_id: int = -1,
+        allow_auto_silence_stop: bool = True,
+        sample_rate: int = 16000,
+        channels: int = 1,
+    ) -> bool:
         with self._lock:
             if self.is_recording:
                 return True
+            self.active_sample_rate = sample_rate
+            self.active_channels = channels
             self._best_pcm_bytes = b""
             self.current_level = 0.0
             self.waveform_bars = [0.08] * 9
@@ -199,7 +211,9 @@ class AudioRecorder:
             self._start_time = time.perf_counter()
 
         self._thread = threading.Thread(
-            target=self._record_loop, args=(device_id,), daemon=True
+            target=self._record_loop,
+            args=(device_id, sample_rate, channels),
+            daemon=True,
         )
         self._thread.start()
         return True
@@ -227,22 +241,31 @@ class AudioRecorder:
         if audio_float32.size > 0:
             audio_float32 = audio_float32 - float(np.mean(audio_float32))
 
-        # Normalização inteligente de ganho (amplifica mesmo microfones bem baixos!)
+        # Normalização inteligente de ganho:
+        # No modo ditado (16kHz), amplifica a voz para alta precisão no Whisper.
+        # No modo estúdio (48kHz), preserva a fidelidade dinâmica do áudio broadcast.
         peak = float(np.max(np.abs(audio_float32))) if audio_float32.size > 0 else 0.0
-        if 0.002 < peak < 0.65:
-            gain = min(12.0, 0.80 / peak)
-            audio_float32 = np.clip(audio_float32 * gain, -1.0, 1.0)
-            samples_int16 = (audio_float32 * 32767.0).astype(np.int16)
-            raw_pcm = samples_int16.tobytes()
+        if self.active_sample_rate <= 16000:
+            if 0.002 < peak < 0.65:
+                gain = min(12.0, 0.80 / peak)
+                audio_float32 = np.clip(audio_float32 * gain, -1.0, 1.0)
+                samples_int16 = (audio_float32 * 32767.0).astype(np.int16)
+                raw_pcm = samples_int16.tobytes()
+        else:
+            if 0.005 < peak < 0.45:
+                gain = min(3.5, 0.85 / peak)
+                audio_float32 = np.clip(audio_float32 * gain, -1.0, 1.0)
+                samples_int16 = (audio_float32 * 32767.0).astype(np.int16)
+                raw_pcm = samples_int16.tobytes()
 
         wav_io = io.BytesIO()
         with wave.open(wav_io, "wb") as wf:
-            wf.setnchannels(self.CHANNELS)
+            wf.setnchannels(self.active_channels)
             wf.setsampwidth(2)
-            wf.setframerate(self.SAMPLE_RATE)
+            wf.setframerate(self.active_sample_rate)
             wf.writeframes(raw_pcm)
 
-        actual_duration = len(samples_int16) / float(self.SAMPLE_RATE)
+        actual_duration = len(samples_int16) / float(self.active_sample_rate * self.active_channels)
         return audio_float32, wav_io.getvalue(), actual_duration
 
     def cancel(self) -> None:
@@ -259,25 +282,25 @@ class AudioRecorder:
             return 0.0
         return max(0.0, time.perf_counter() - self._start_time)
 
-    def _record_loop(self, device_id: int) -> None:
-        chunk_bytes = int((self.SAMPLE_RATE * self.CHUNK_DURATION_MS // 1000) * 2)
+    def _record_loop(self, device_id: int, sample_rate: int = 16000, channels: int = 1) -> None:
+        chunk_bytes = int((sample_rate * self.CHUNK_DURATION_MS // 1000) * 2 * channels)
 
         streams: List[_SingleDeviceStream] = []
         num_devs = winmm.waveInGetNumDevs()
 
         if device_id >= 0 and device_id < num_devs:
-            st = _SingleDeviceStream(device_id, self.SAMPLE_RATE, chunk_bytes, self.NUM_BUFFERS)
+            st = _SingleDeviceStream(device_id, sample_rate, chunk_bytes, self.NUM_BUFFERS, channels)
             if st.opened:
                 streams.append(st)
 
         # Se for Automático (-1) ou se o dispositivo específico falhou, abre TODOS os microfones disponíveis!
         if not streams:
             for d_id in range(num_devs):
-                st = _SingleDeviceStream(d_id, self.SAMPLE_RATE, chunk_bytes, self.NUM_BUFFERS)
+                st = _SingleDeviceStream(d_id, sample_rate, chunk_bytes, self.NUM_BUFFERS, channels)
                 if st.opened:
                     streams.append(st)
             if not streams:
-                st = _SingleDeviceStream(WAVE_MAPPER, self.SAMPLE_RATE, chunk_bytes, self.NUM_BUFFERS)
+                st = _SingleDeviceStream(WAVE_MAPPER, sample_rate, chunk_bytes, self.NUM_BUFFERS, channels)
                 if st.opened:
                     streams.append(st)
 

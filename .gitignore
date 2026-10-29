@@ -1,6 +1,7 @@
 # Configurações com Chaves de API Privadas e Histórico Pessoal
 config.json
 history.json
+audio_recordings.json
 *.log
 wisprflow.log
 app.pid

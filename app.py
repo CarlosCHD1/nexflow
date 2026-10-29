@@ -8,7 +8,16 @@ from tkinter import ttk, messagebox
 import webbrowser
 from typing import Dict, Any, List
 
-from config import load_config, save_config, load_history, add_history_entry, get_resource_path
+from config import (
+    load_config,
+    save_config,
+    load_history,
+    add_history_entry,
+    get_resource_path,
+    get_audios_dir,
+    add_audio_recording_entry,
+    load_audio_history,
+)
 from PIL import Image, ImageTk
 from audio_recorder import AudioRecorder, list_microphones
 from transcriber import HybridTranscriber, LOCAL_MODELS_CATALOG
@@ -51,7 +60,10 @@ class WisprFlowFreeApp:
         self.root = root
         self.config: Dict[str, Any] = load_config()
         self.history: List[Dict[str, Any]] = load_history()
+        self.audio_history: List[Dict[str, Any]] = load_audio_history()
         self.mics = list_microphones()
+        self._is_recording_audio = False
+        self._audio_rec_folder = get_audios_dir()
 
         # Garante que a inicialização automática com o Windows esteja configurada conforme preferência
         configure_windows_startup(bool(self.config.get("start_with_windows", True)))
@@ -85,7 +97,7 @@ class WisprFlowFreeApp:
             tool_enabled=bool(self.config.get("tool_enabled", True)),
         )
 
-        # Inicia o listener global de atalhos de teclado + Hook Ctrl+CapsLock
+        # Inicia o listener global de atalhos de teclado + Hook Ctrl+CapsLock + Alt+A
         self.hotkey_listener = GlobalHotkeyListener(
             get_hotkey_codes=lambda: self.config.get("hotkey_codes", [0x14]),
             get_hotkey_mode=lambda: self.config.get("hotkey_mode", "smart"),
@@ -94,6 +106,7 @@ class WisprFlowFreeApp:
             on_cancel_recording=self._on_hotkey_cancel,
             on_toggle_locked=self._on_hotkey_locked,
             on_master_toggle=self._on_master_toggle,
+            on_toggle_audio_recording=self._on_toggle_audio_recording,
             initial_tool_enabled=bool(self.config.get("tool_enabled", True)),
         )
         self.hotkey_listener.start()
@@ -106,8 +119,8 @@ class WisprFlowFreeApp:
 
     def _setup_main_window(self) -> None:
         self.root.title("Wispr Flow Free — Ditado Inteligente por Voz")
-        self.root.geometry("820x740")
-        self.root.minsize(760, 680)
+        self.root.geometry("840x790")
+        self.root.minsize(800, 720)
         self.root.configure(bg=self.BG_MAIN)
 
         # Ícone da janela e da barra de tarefas
@@ -558,6 +571,78 @@ class WisprFlowFreeApp:
             command=self._save_ui_settings,
         ).pack(side="right")
 
+        # --- CARD DO GRAVADOR DE ÁUDIO STUDIO (ALT + A) ---
+        audio_card = tk.Frame(
+            body, bg=self.BG_CARD, padx=16, pady=10, highlightthickness=1, highlightbackground=self.BORDER_COL
+        )
+        audio_card.pack(fill="x", pady=(0, 10))
+
+        ac_hdr = tk.Frame(audio_card, bg=self.BG_CARD)
+        ac_hdr.pack(fill="x")
+
+        ac_left = tk.Frame(ac_hdr, bg=self.BG_CARD)
+        ac_left.pack(side="left", fill="x", expand=True)
+
+        tk.Label(
+            ac_left,
+            text="🎧 Gravador de Áudio Studio (Alt + A)",
+            font=("Segoe UI Semibold", 11),
+            fg="#F43F5E",
+            bg=self.BG_CARD,
+        ).pack(anchor="w")
+
+        tk.Label(
+            ac_left,
+            text=f"Salva automaticamente em: {self._audio_rec_folder}",
+            font=("Segoe UI", 8),
+            fg=self.TEXT_SECONDARY,
+            bg=self.BG_CARD,
+        ).pack(anchor="w", pady=(2, 0))
+
+        ac_right = tk.Frame(ac_hdr, bg=self.BG_CARD)
+        ac_right.pack(side="right")
+
+        tk.Button(
+            ac_right,
+            text="📁 Abrir Pasta de Áudios",
+            font=("Segoe UI Semibold", 8),
+            bg=self.BG_INPUT,
+            fg="#F8FAFC",
+            activebackground=self.BORDER_COL,
+            activeforeground="#FFFFFF",
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2",
+            command=self._open_audios_folder,
+        ).pack(side="left", padx=(0, 8))
+
+        self.btn_rec_audio_ui = tk.Button(
+            ac_right,
+            text="⏺ Gravar Áudio (Alt + A)",
+            font=("Segoe UI Semibold", 8),
+            bg="#9F1239",
+            fg="#FFFFFF",
+            activebackground="#BE123C",
+            activeforeground="#FFFFFF",
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2",
+            command=self._on_toggle_audio_recording,
+        )
+        self.btn_rec_audio_ui.pack(side="left")
+
+        ac_foot = tk.Frame(audio_card, bg=self.BG_CARD)
+        ac_foot.pack(fill="x", pady=(6, 0))
+        tk.Label(
+            ac_foot,
+            text="● Qualidade Studio Broadcast: 48.000 Hz, 16-bit PCM WAV (ideal para vídeos no Premiere, DaVinci e CapCut)",
+            font=("Segoe UI", 8),
+            fg="#34D399",
+            bg=self.BG_CARD,
+        ).pack(anchor="w")
+
         # --- ÁREA DE TESTE IMEDIATO + HISTÓRICO DE TRANSCRIÇÕES ---
         bottom_card = tk.Frame(
             body, bg=self.BG_CARD, padx=16, pady=12, highlightthickness=1, highlightbackground=self.BORDER_COL
@@ -781,12 +866,118 @@ class WisprFlowFreeApp:
         self.root.after(0, lambda: self.pill.set_state("cancelled", "✕ Ditado cancelado", auto_revert_s=1.0))
 
     def _trigger_stop_from_ui(self) -> None:
+        if getattr(self, "_is_recording_audio", False):
+            self._stop_audio_file_recording()
+            return
         self.hotkey_listener.notify_recording_stopped_externally()
         self._on_hotkey_stop()
 
     def _trigger_cancel_from_ui(self) -> None:
+        if getattr(self, "_is_recording_audio", False):
+            self._cancel_audio_file_recording()
+            return
         self.hotkey_listener.notify_recording_stopped_externally()
         self._on_hotkey_cancel()
+
+    # --- FLUXO DO GRAVADOR DE ÁUDIO STUDIO (ALT + A) ---
+    def _on_toggle_audio_recording(self) -> None:
+        """Disparado via atalho global Alt + A ou botão da interface."""
+        if not getattr(self, "_is_recording_audio", False):
+            self._start_audio_file_recording()
+        else:
+            self._stop_audio_file_recording()
+
+    def _update_audio_btn_text(self, is_recording: bool) -> None:
+        if hasattr(self, "btn_rec_audio_ui"):
+            if is_recording:
+                self.btn_rec_audio_ui.configure(text="⏹ Parar e Salvar (Alt + A)", bg="#DC2626")
+            else:
+                self.btn_rec_audio_ui.configure(text="⏺ Gravar Áudio (Alt + A)", bg="#9F1239")
+
+    def _start_audio_file_recording(self) -> None:
+        if self._is_processing:
+            return
+        if self.recorder.is_recording:
+            self.recorder.cancel()
+
+        self._is_recording_audio = True
+        mic_id = self.config.get("mic_device_id", -1)
+        sr = int(self.config.get("audio_recorder_sample_rate", 48000))
+        print(f"[AudioRecorder] Iniciando gravação Studio (Alt+A, rate={sr}Hz, mic={mic_id})")
+
+        # Inicia gravação a 48000 Hz sem auto-stop de silêncio (gravação contínua de alta fidelidade)
+        self.recorder.start(device_id=mic_id, allow_auto_silence_stop=False, sample_rate=sr)
+        play_sound_cue("start", enabled=self.config.get("sound_feedback", True))
+
+        self.root.after(0, lambda: self.pill.set_state("recording_audio", "Gravando Áudio (Alt+A)"))
+        self.root.after(0, lambda: self._update_audio_btn_text(True))
+
+    def _stop_audio_file_recording(self) -> None:
+        if not getattr(self, "_is_recording_audio", False) or not self.recorder.is_recording:
+            return
+
+        self._is_recording_audio = False
+        self.root.after(0, lambda: self._update_audio_btn_text(False))
+        play_sound_cue("stop", enabled=self.config.get("sound_feedback", True))
+
+        audio_f32, wav_bytes, duration_s = self.recorder.stop()
+        print(f"[AudioRecorder] Gravação finalizada: duration={duration_s:.2f}s, bytes={len(wav_bytes)}")
+
+        if duration_s < 0.35 or not wav_bytes:
+            self.root.after(
+                0,
+                lambda: self.pill.set_state("cancelled", "Gravação muito curta", auto_revert_s=1.2),
+            )
+            return
+
+        dest_folder = self._audio_rec_folder
+        try:
+            dest_folder.mkdir(parents=True, exist_ok=True)
+            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"Gravacao_{timestamp}.wav"
+            out_file = dest_folder / filename
+            out_file.write_bytes(wav_bytes)
+            print(f"[AudioRecorder] Áudio salvo com sucesso: {out_file}")
+
+            # Registra no histórico de áudios
+            add_audio_recording_entry(
+                filename=filename,
+                filepath=str(out_file),
+                duration_s=duration_s,
+                size_bytes=len(wav_bytes),
+            )
+            self.config["stats_audio_recordings_count"] = self.config.get("stats_audio_recordings_count", 0) + 1
+            save_config(self.config)
+
+            play_sound_cue("done", enabled=self.config.get("sound_feedback", True))
+            self.root.after(
+                0,
+                lambda: self.pill.set_state("done", "✓ Áudio salvo em áudios!", auto_revert_s=2.2),
+            )
+        except Exception as e:
+            print(f"[AudioRecorder] Erro ao salvar arquivo: {e}")
+            self.root.after(
+                0,
+                lambda: self.pill.set_state("cancelled", "Erro ao salvar", auto_revert_s=1.5),
+            )
+
+    def _cancel_audio_file_recording(self) -> None:
+        self._is_recording_audio = False
+        self.recorder.cancel()
+        self.root.after(0, lambda: self._update_audio_btn_text(False))
+        play_sound_cue("cancel", enabled=self.config.get("sound_feedback", True))
+        self.root.after(
+            0,
+            lambda: self.pill.set_state("cancelled", "✕ Gravação descartada", auto_revert_s=1.2),
+        )
+
+    def _open_audios_folder(self) -> None:
+        try:
+            folder = str(self._audio_rec_folder)
+            os.makedirs(folder, exist_ok=True)
+            os.startfile(folder)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível abrir a pasta:\n{e}")
 
     def _on_hotkey_stop(self) -> None:
         if not self.recorder.is_recording or self._is_processing:

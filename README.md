@@ -24,12 +24,13 @@ O **WisperFlow Free** foi desenvolvido para quem quer economizar tempo e racioc�
 
 ### 🌟 Principais Recursos
 
-- ⌨️ **Acionamento por 1 Tecla (`CapsLock`)**: Pressione `CapsLock`, fale e pressione novamente (ou faça uma pausa). O texto aparece digitado instantaneamente.
-- 🔄 **Pausar / Retomar com `Ctrl + CapsLock`**: Quando precisar usar o Caps Lock tradicional para letras maiúsculas, basta apertar `Ctrl + CapsLock` para alternar o modo.
+- ⌨️ **Ditado Inteligente por 1 Tecla (`CapsLock`)**: Pressione `CapsLock`, fale e pressione novamente (ou faça uma pausa). O texto é transcrito e digitado diretamente onde seu cursor estiver piscando.
+- 🎧 **Gravador de Áudio Studio (`Alt + A`)**: Pressione `Alt + A` para gravar áudios de altíssima fidelidade (48.000 Hz, 16-bit PCM WAV broadcast) que são salvos automaticamente na sua pasta `Vídeos/Conteúdos/áudios/` com data e hora. Ideal para criadores de conteúdo, podcasts e edição de vídeo (Premiere, DaVinci Resolve, CapCut).
+- 🔄 **Pausar / Retomar Ditado com `Ctrl + CapsLock`**: Quando precisar usar o Caps Lock tradicional para letras maiúsculas, basta apertar `Ctrl + CapsLock` para alternar o modo.
 - 🧠 **Motor Híbrido com IA de Ponta**:
-  - **Groq Cloud (Whisper Turbo + Llama 3.3 70B)**: Transcrição em ~400ms com reescrita inteligente que remove vícios de fala (*"ééé"*, *"tipo"*, repetições, gagueiras) e pontua automaticamente.
+  - **Groq Cloud (Whisper Turbo + LLM Inteligente)**: Transcrição em ~400ms com reescrita que remove vícios de fala (*"ééé"*, *"tipo"*, repetições, gagueiras) e pontua automaticamente.
   - **Fallback Local (Faster-Whisper CUDA)**: Funciona 100% offline se estiver sem internet ou preferir processamento local na sua placa de vídeo.
-- 📱 **Pílula Flutuante Vertical & Discreta**: Interface moderna, compacta e translúcida que exibe ondas de áudio dinâmicas sem roubar o foco da sua janela ativa.
+- 📱 **Pílula Flutuante Vertical & Discreta**: Interface moderna, compacta e translúcida que exibe ondas de áudio dinâmicas sem roubar o foco da sua janela ativa (roxo para ditado, vermelho para gravação de áudio studio).
 - ⚡ **Nenhum Rastreamento ou Assinatura**: 100% gratuito e de código aberto sob a licença MIT.
 
 ---

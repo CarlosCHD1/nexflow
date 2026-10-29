@@ -171,7 +171,7 @@ class FloatingPillOverlay:
             return
 
         # Clique sem arrastar
-        if self.state in ("recording_hold", "recording_locked"):
+        if self.state in ("recording_hold", "recording_locked", "recording_audio"):
             # Se clicou na parte inferior do botão X de cancelar
             if event.y >= self.height - 30:
                 self.on_cancel_clicked()
@@ -301,8 +301,9 @@ class FloatingPillOverlay:
         # ----------------------------------------------------
         # ESTADO 2: GRAVANDO (Vertical Waveform Ativo)
         # ----------------------------------------------------
-        elif self.state in ("recording_hold", "recording_locked"):
-            is_locked = self.state == "recording_locked"
+        elif self.state in ("recording_hold", "recording_locked", "recording_audio"):
+            is_audio_mode = (self.state == "recording_audio")
+            is_locked = (self.state == "recording_locked")
             pw = 36 * scale
             ph = 136 * scale
             x0 = cx - pw // 2
@@ -311,8 +312,15 @@ class FloatingPillOverlay:
             y1 = y0 + ph
             radius = pw // 2
 
-            border_color = (56, 189, 248, 255) if is_locked else (168, 85, 247, 255)
-            glow_color = (56, 189, 248, 60) if is_locked else (168, 85, 247, 60)
+            if is_audio_mode:
+                border_color = (239, 68, 68, 255)  # Vermelho Studio Broadcast
+                glow_color = (239, 68, 68, 75)
+            elif is_locked:
+                border_color = (56, 189, 248, 255)
+                glow_color = (56, 189, 248, 60)
+            else:
+                border_color = (168, 85, 247, 255)
+                glow_color = (168, 85, 247, 60)
 
             # Borda com brilho neon suave
             draw.rounded_rectangle(
@@ -333,7 +341,13 @@ class FloatingPillOverlay:
             rec_y = y0 + 16 * scale
             rec_r = 4.0 * scale
             pulse_rec = int(30 * math.sin(self._anim_phase * 1.8))
-            rec_color = (56, 189, 248, 255) if is_locked else (244, 63, 94, 255)
+            if is_audio_mode:
+                rec_color = (239, 68, 68, 255)
+            elif is_locked:
+                rec_color = (56, 189, 248, 255)
+            else:
+                rec_color = (244, 63, 94, 255)
+
             draw.ellipse(
                 [cx - rec_r - 2, rec_y - rec_r - 2, cx + rec_r + 2, rec_y + rec_r + 2],
                 fill=(rec_color[0], rec_color[1], rec_color[2], 90 + max(0, pulse_rec * 2)),
@@ -362,7 +376,9 @@ class FloatingPillOverlay:
                 by1 = by0 + bar_h
 
                 # Gradiente de cor da barra
-                if is_locked:
+                if is_audio_mode:
+                    bar_fill = (239, 68, 68, 255) if lvl < 0.55 else (254, 202, 202, 255)
+                elif is_locked:
                     bar_fill = (56, 189, 248, 255) if lvl < 0.55 else (186, 230, 253, 255)
                 else:
                     bar_fill = (192, 132, 252, 255) if lvl < 0.55 else (245, 208, 254, 255)
