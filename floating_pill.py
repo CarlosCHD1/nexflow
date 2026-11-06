@@ -5,7 +5,7 @@ import tkinter as tk
 from typing import Callable, List, Optional
 from PIL import Image, ImageDraw, ImageTk
 
-from win32_utils import make_window_non_activating
+from platform_adapter import apply_pill_window_styles, is_windows
 from config import get_resource_path
 
 TRANSPARENT_KEY = "#010101"
@@ -63,12 +63,7 @@ class FloatingPillOverlay:
         self.win = tk.Toplevel(self.root)
         self.win.withdraw()
         self.win.overrideredirect(True)
-        self.win.attributes("-topmost", True)
-        self.win.configure(bg=TRANSPARENT_KEY)
-        try:
-            self.win.wm_attributes("-transparentcolor", TRANSPARENT_KEY)
-        except Exception:
-            pass
+        apply_pill_window_styles(self.win, TRANSPARENT_KEY)
 
         # Dimensões verticais compactas
         self.width = 44
@@ -119,9 +114,7 @@ class FloatingPillOverlay:
 
     def _apply_non_activating(self) -> None:
         try:
-            hwnd = int(self.win.wm_frame(), 16) if self.win.wm_frame() != "0x0" else self.win.winfo_id()
-            make_window_non_activating(hwnd)
-            make_window_non_activating(self.win.winfo_id())
+            apply_pill_window_styles(self.win, TRANSPARENT_KEY)
         except Exception:
             pass
 
@@ -180,6 +173,20 @@ class FloatingPillOverlay:
         elif self.state == "idle":
             self.on_open_settings()
 
+    def reset_position_to_center(self) -> None:
+        """Reposiciona a pílula em um local visível e traz para a frente."""
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        self.pos_x = max(20, sw - self.width - 60)
+        self.pos_y = max(40, (sh - self.height) // 2)
+        self.win.geometry(f"{self.width}x{self.height}+{self.pos_x}+{self.pos_y}")
+        self.win.deiconify()
+        self.win.lift()
+        self.win.attributes("-topmost", True)
+        self._apply_non_activating()
+        self.set_state("done", "✓ Pílula aqui!", auto_revert_s=2.0)
+        self.on_position_changed(self.pos_x, self.pos_y)
+
     def _tick(self) -> None:
         now = time.perf_counter()
         if self._state_until > 0 and now >= self._state_until:
@@ -187,10 +194,26 @@ class FloatingPillOverlay:
             self.set_state("idle")
 
         self._anim_phase += 0.16
+
+        # Garante que a pílula sempre esteja no topo e visível se configurada para "always"
+        if self.visibility_mode == "always" and not self.win.winfo_viewable():
+            self.win.deiconify()
+            self.win.lift()
+            self.win.attributes("-topmost", True)
+            self._apply_non_activating()
+
+        # Reafirma topmost suavemente a cada ~3 segundos
+        if int(now * 10) % 30 == 0 and self.win.winfo_viewable():
+            try:
+                self.win.lift()
+                self.win.attributes("-topmost", True)
+            except Exception:
+                pass
+
         if self.win.winfo_viewable():
             self._render_frame()
 
-        delay_ms = 33 if self.state != "idle" else 120
+        delay_ms = 33 if self.state != "idle" else 100
         self.root.after(delay_ms, self._tick)
 
     def _render_frame(self) -> None:
@@ -216,12 +239,26 @@ class FloatingPillOverlay:
             y1 = y0 + ph
             radius = pw // 2
 
-            # Fundo escuro fosco elegante com borda fina
-            border_color = (58, 62, 82, 230) if is_enabled else (125, 85, 35, 230)
+            # Fundo escuro fosco com borda luminosa e halo neon
+            if is_enabled:
+                border_color = (139, 92, 246, 240)  # Roxo neon moderno
+                halo_color = (139, 92, 246, 65)
+            else:
+                border_color = (245, 158, 11, 240)  # Âmbar suave
+                halo_color = (245, 158, 11, 65)
+
+            # Halo externo
+            draw.rounded_rectangle(
+                [x0 - 1, y0 - 1, x1 + 1, y1 + 1],
+                radius=radius + 1,
+                outline=halo_color,
+                width=2,
+            )
+            # Corpo da pílula
             draw.rounded_rectangle(
                 [x0, y0, x1, y1],
                 radius=radius,
-                fill=(16, 17, 24, 245),
+                fill=(20, 22, 32, 252),
                 outline=border_color,
                 width=2,
             )

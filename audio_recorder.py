@@ -7,7 +7,15 @@ import wave
 from typing import List, Dict, Optional, Tuple, Callable
 import numpy as np
 
-winmm = ctypes.windll.winmm
+import platform
+import subprocess
+
+IS_WINDOWS = platform.system() == "Windows"
+
+if IS_WINDOWS:
+    winmm = ctypes.windll.winmm
+else:
+    winmm = None
 
 WAVE_MAPPER = 0xFFFFFFFF
 WAVE_FORMAT_PCM = 1
@@ -15,46 +23,56 @@ WHDR_DONE = 0x00000001
 WHDR_PREPARED = 0x00000002
 
 
-class WAVEINCAPSW(ctypes.Structure):
-    _fields_ = [
-        ("wMid", wintypes.WORD),
-        ("wPid", wintypes.WORD),
-        ("vDriverVersion", wintypes.UINT),
-        ("szPname", wintypes.WCHAR * 32),
-        ("dwFormats", wintypes.DWORD),
-        ("wChannels", wintypes.WORD),
-        ("wReserved1", wintypes.WORD),
-    ]
+if IS_WINDOWS:
+    class WAVEINCAPSW(ctypes.Structure):
+        _fields_ = [
+            ("wMid", wintypes.WORD),
+            ("wPid", wintypes.WORD),
+            ("vDriverVersion", wintypes.UINT),
+            ("szPname", wintypes.WCHAR * 32),
+            ("dwFormats", wintypes.DWORD),
+            ("wChannels", wintypes.WORD),
+            ("wReserved1", wintypes.WORD),
+        ]
 
 
-class WAVEFORMATEX(ctypes.Structure):
-    _fields_ = [
-        ("wFormatTag", wintypes.WORD),
-        ("nChannels", wintypes.WORD),
-        ("nSamplesPerSec", wintypes.DWORD),
-        ("nAvgBytesPerSec", wintypes.DWORD),
-        ("nBlockAlign", wintypes.WORD),
-        ("wBitsPerSample", wintypes.WORD),
-        ("cbSize", wintypes.WORD),
-    ]
+    class WAVEFORMATEX(ctypes.Structure):
+        _fields_ = [
+            ("wFormatTag", wintypes.WORD),
+            ("nChannels", wintypes.WORD),
+            ("nSamplesPerSec", wintypes.DWORD),
+            ("nAvgBytesPerSec", wintypes.DWORD),
+            ("nBlockAlign", wintypes.WORD),
+            ("wBitsPerSample", wintypes.WORD),
+            ("cbSize", wintypes.WORD),
+        ]
 
 
-class WAVEHDR(ctypes.Structure):
-    _fields_ = [
-        ("lpData", ctypes.c_char_p),
-        ("dwBufferLength", wintypes.DWORD),
-        ("dwBytesRecorded", wintypes.DWORD),
-        ("dwUser", ctypes.c_size_t),
-        ("dwFlags", wintypes.DWORD),
-        ("dwLoops", wintypes.DWORD),
-        ("lpNext", ctypes.c_void_p),
-        ("reserved", ctypes.c_size_t),
-    ]
+    class WAVEHDR(ctypes.Structure):
+        _fields_ = [
+            ("lpData", ctypes.c_char_p),
+            ("dwBufferLength", wintypes.DWORD),
+            ("dwBytesRecorded", wintypes.DWORD),
+            ("dwUser", ctypes.c_size_t),
+            ("dwFlags", wintypes.DWORD),
+            ("dwLoops", wintypes.DWORD),
+            ("lpNext", ctypes.c_void_p),
+            ("reserved", ctypes.c_size_t),
+        ]
+else:
+    class WAVEINCAPSW:
+        pass
+    class WAVEFORMATEX:
+        pass
+    class WAVEHDR:
+        pass
 
 
 def list_microphones() -> List[Dict[str, any]]:
-    """Lista todos os microfones disponíveis no Windows."""
+    """Lista todos os microfones disponíveis no sistema."""
     devices = [{"id": -1, "name": "Automático Inteligente (Detecta o microfone ativo)"}]
+    if not IS_WINDOWS or winmm is None:
+        return devices
     try:
         num = winmm.waveInGetNumDevs()
         for i in range(num):

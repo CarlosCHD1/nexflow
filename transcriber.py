@@ -129,7 +129,7 @@ def local_smart_cleanup_pt(text: str, tone: str = "natural", trailing_space: boo
 
 class HybridTranscriber:
     """
-    Motor Híbrido do Wispr Flow Free:
+    Motor Híbrido do NexFlow Pro:
     - Transcrição via Groq Cloud (whisper-large-v3-turbo) OU Local GPU (Faster-Whisper CUDA int8 na GTX 1660 SUPER).
     - Reescrita e Limpeza Inteligente via LLM (Llama 3.3 70B na Groq / Ollama local) + Limpador Linguístico Local.
     """
@@ -277,7 +277,7 @@ class HybridTranscriber:
         if not raw_text or is_hallucination(raw_text):
             return "", "", engine_used or "Silêncio"
 
-        # 2. ETAPA DE LIMPEZA E CORREÇÃO INTELIGENTE (Estilo Wispr Flow)
+        # 2. ETAPA DE LIMPEZA E CORREÇÃO INTELIGENTE (Estilo NexFlow)
         if cleanup_level == "raw":
             final_text = raw_text
             if trailing_space and not final_text.endswith(" "):
@@ -327,7 +327,7 @@ class HybridTranscriber:
         self, wav_bytes: bytes, api_key: str, model: str, language: str
     ) -> str:
         url = "https://api.groq.com/openai/v1/audio/transcriptions"
-        boundary = f"----WisprFlowBoundary{uuid.uuid4().hex}"
+        boundary = f"----NexFlowBoundary{uuid.uuid4().hex}"
         body = io.BytesIO()
 
         def _add_field(name: str, value: str):
@@ -405,7 +405,7 @@ class HybridTranscriber:
         }.get(tone, "Mantenha o tom natural e direto.")
 
         system_prompt = (
-            "Você é o motor invisível de edição de ditado por voz do Wispr Flow em Português Brasileiro.\n"
+            "Você é o motor invisível de edição de ditado por voz do NexFlow em Português Brasileiro.\n"
             "Sua ÚNICA função é receber uma transcrição de voz dentro de <transcricao>...</transcricao> "
             "e devolver APENAS o texto limpo, corrigido e pronto para ser colado no cursor do usuário.\n"
             "REGRAS ABSOLUTAS:\n"

@@ -1,12 +1,12 @@
-# Dependências Principais do WisperFlow Free
-# A interface e gravação de áudio usam a Win32 API nativa (ctypes) sem necessidade de bibliotecas pesadas de terceiros.
+# NexFlow Pro — Dependências
+# A interface e gravação de áudio utilizam APIs nativas do sistema operacional via ctypes / platform_adapter.
 
-# Manipulação de imagens, renderização da pílula e suporte a ícones
+# Manipulação de imagens, renderização da pílula flutuante e suporte a ícones
 Pillow>=10.0.0
 
 # Motor de Transcrição Local (Opcional - necessário apenas se for usar modo 100% Offline / GPU Local)
 faster-whisper>=1.0.0
 ctranslate2>=4.0.0
 
-# Para gerar o executável (.exe)
+# Para gerar o executável (.exe) comercial
 pyinstaller>=6.0.0

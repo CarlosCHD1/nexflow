@@ -1,4 +1,6 @@
 import ctypes
+import os
+import platform
 from ctypes import wintypes
 import io
 import math
@@ -6,11 +8,18 @@ import struct
 import threading
 import time
 import wave
-import winsound
 from typing import Callable, List, Optional, Tuple, Dict
 
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+IS_WINDOWS = platform.system() == "Windows"
+
+if IS_WINDOWS:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    import winsound
+else:
+    user32 = None
+    kernel32 = None
+    winsound = None
 
 # Constantes Win32
 GWL_EXSTYLE = -20
@@ -179,6 +188,8 @@ def make_window_non_activating(hwnd: int) -> None:
     Configura uma janela Tkinter (ex: pílula flutuante) para NUNCA roubar o foco
     do aplicativo onde o usuário está digitando e não aparecer no Alt+Tab.
     """
+    if user32 is None:
+        return
     try:
         get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
         set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
@@ -311,6 +322,8 @@ def inject_text_unicode_direct(text: str) -> bool:
 
 
 def get_foreground_window() -> int:
+    if user32 is None:
+        return 0
     return int(user32.GetForegroundWindow() or 0)
 
 
@@ -418,7 +431,7 @@ def ensure_capslock_off() -> None:
 def configure_windows_startup(enable: bool = True) -> bool:
     """
     Configura ou remove a inicialização automática com o Windows na pasta Startup do usuário.
-    Assim que o computador ligar, o Wispr Flow Free inicia silenciosamente em segundo plano.
+    Assim que o computador ligar, o NexFlow inicia silenciosamente em segundo plano.
     """
     try:
         import os
@@ -435,7 +448,13 @@ def configure_windows_startup(enable: bool = True) -> bool:
             / "Programs"
             / "Startup"
         )
-        vbs_path = startup_dir / "WisprFlow_Free_AutoStart.vbs"
+        vbs_path = startup_dir / "NexFlow_AutoStart.vbs"
+        old_vbs = startup_dir / "WisprFlow_Free_AutoStart.vbs"
+        if old_vbs.exists():
+            try:
+                old_vbs.unlink()
+            except Exception:
+                pass
         app_dir = Path(__file__).resolve().parent
         app_py = app_dir / "app.py"
 
@@ -464,6 +483,8 @@ def configure_windows_startup(enable: bool = True) -> bool:
 
 def is_key_pressed(vk: int) -> bool:
     """Verifica se uma tecla Virtual-Key está pressionada no momento."""
+    if user32 is None:
+        return False
     if _LL_INTERCEPTED_DOWN.get(vk, False):
         return True
     if vk == VK_CONTROL:
@@ -496,7 +517,7 @@ def format_hotkey_label(codes: List[int]) -> str:
     return " + ".join(VK_NAMES.get(c, f"Tecla({hex(c)})") for c in codes)
 
 
-# Sons suaves sintetizados em memória (estilo Wispr Flow)
+# Sons suaves sintetizados em memória (estilo NexFlow Pro)
 _SOUND_CACHE: Dict[str, bytes] = {}
 
 
@@ -592,8 +613,9 @@ class GlobalHotkeyListener:
         self._running = True
         if self.tool_enabled and self.get_hotkey_codes() == [VK_CAPITAL]:
             ensure_capslock_off()
-        self._hook_thread = threading.Thread(target=self._run_ll_keyboard_hook, daemon=True)
-        self._hook_thread.start()
+        if IS_WINDOWS and user32 is not None:
+            self._hook_thread = threading.Thread(target=self._run_ll_keyboard_hook, daemon=True)
+            self._hook_thread.start()
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
 

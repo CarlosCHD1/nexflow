@@ -2,6 +2,7 @@
 config.json
 history.json
 audio_recordings.json
+license.dat
 *.log
 wisprflow.log
 app.pid
@@ -27,6 +28,10 @@ dist/
 *.wav
 *.mp3
 *.ogg
+
+# Outros projetos / mídias locais
+isaias-40-31/
+mirofish-analise/
 
 # IDEs e Sistema
 .vscode/

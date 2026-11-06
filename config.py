@@ -14,6 +14,10 @@ CONFIG_PATH = BASE_DIR / "config.json"
 HISTORY_PATH = BASE_DIR / "history.json"
 AUDIO_HISTORY_PATH = BASE_DIR / "audio_recordings.json"
 
+APP_NAME = "NexFlow"
+APP_VERSION = "2.0 Pro"
+APP_TAGLINE = "Ditado Inteligente por Voz & Gravador Studio com IA"
+
 
 def get_audios_dir() -> Path:
     """Localiza ou cria a pasta 'áudios' dentro de Vídeos/Conteúdos do usuário."""
